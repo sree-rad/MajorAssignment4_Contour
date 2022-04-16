@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CT scan Visualization using d3.contour function</title>
+
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.1/jquery-ui.js"></script>
+
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.13.1/themes/base/jquery-ui.css">
+    <style>
+        #time {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            font-family: sans-serif;
+            font-size: 12pt;
+        }
+
+        .legend_text {
+            font-family: sans-serif;
+            font-size: 5pt;
+        }
+
+        #custom-handle {
+            width: 3em;
+            height: 1.6em;
+            top: 50%;
+            margin-top: -.8em;
+            text-align: center;
+            line-height: 1.6em;
+        }
+    </style>
+
+</head>
+
+
+<body>
+    <h3>Slide to adjust threshold range</h3>
+    <p>
+        <label for="amount">Threshold range:</label>
+        <input type="text" id="amount" readonly style="border:0; color:#f6931f; font-weight:bold;">
+    </p>
+    <div id="slider-range" style="width:40%;">
+    </div>
+    <br>
+
+    <h3>Slide to adjust threshold</h3>
+    <div id="slider" style="width:40%;">
+        <div id="custom-handle" class="ui-slider-handle"></div>
+    </div>
+    <br>
+
+    <svg width="40vw" viewbox="0 0 512 512"></svg>
+
+    <script>
+
+        let svg = d3.select("svg");
+        svg.html("");
+        const ctData = `data/Data_CT.csv`; //  abstracted data file
+
+        let min_val = 1;
+        let max_val = 0;
+        let threshold = 300;
+        let values_T = [];
+
+        function initMinMaxSlider() {
+
+            console.log("On MIN-MAX Slider: " + min_val + "~" + max_val)
+
+            $("#slider-range").slider({
+                range: true,
+                min: min_val,
+                max: max_val,
+                values: [min_val, max_val],
+                /*start: function( event, ui ) {
+                    handleIndex = ui.handleIndex
+                },*/
+                slide: function (event, ui) {
+                    $("#amount").val(ui.values[0] + " - " + ui.values[1]);
+                },
+                change: function (event, obj) {
+                    console.log(obj.handleIndex)
+                    if (obj.handleIndex == 0) {
+                        min_val = obj.value
+                    } else {
+                        max_val = obj.value;
+                    }
+
+                    plot_contour();
+                }
+            });
+            $("#amount").val($("#slider-range").slider("values", 0) +
+                " - " + $("#slider-range").slider("values", 1));
+        }
+
+        function initThresholdSlider() {
+
+            var handle = $("#custom-handle");
+            $("#slider").slider({
+                min: min_val,
+                max: max_val,
+                value: threshold,
+                create: function () {
+                    handle.text($(this).slider("value"));
+                },
+                slide: function (event, ui) {
+                    handle.text(ui.value);
+                },
+                change: function (event, ui) {
+                    console.log(ui.value);
+                    threshold = ui.value;
+                    plot_contour();
+                }
+            });
+        }
+
+        function plot_contour() {
+            // data dimensions
+            let m = 512, n = 512;
+            svg.html("");
+
+            console.log("Min-CNT: " + min_val +
+                " Max-CNT: " + max_val +
+                " Threshold: " + threshold)
+
+            // path generator
+            const path = d3.geoPath();
+
+            /////////////////COLOR CODING/////////////////////////////
+            let colors = d3.scaleLinear()
+                .domain(d3.range(min_val, max_val,
+                    parseInt(Math.abs(max_val - min_val) / 6.5)))
+                //.range(["#0d1a50", "#3e5eba", "#2b83ba", "#abdda4", "#ffffbf", "#fdae61", "#d7191c"])
+                .range(["#ffffff", "#3e5eba", "#2b83ba", "#abdda4", "#ffffbf", "#fdae61", "#d7191c"])
+                .interpolate(d3.interpolateHcl);
+
+            ////////////////////////////////////////////////////////////
+
+            // Step 3 contour generator
+            let contours = d3.contours()
+                .size([m, n])
+                .thresholds(d3.range(min_val, max_val, threshold))
+                (values_T);
+
+            // Step 3 append contour to path (d)
+            svg.append("g").attr("class", "contours")
+                .selectAll("path")
+                .data(contours)
+                .enter()
+                .append("path")
+                .attr("d", function (d) { return path(d) })
+                .attr("stroke", "black")
+                .attr("stroke-width", ".1px")
+                .attr("stroke-linejoin", "round")
+                .attr("fill",
+                    function (d) {
+                        return colors(d.value)
+                    })
+        }
+
+        function render(fileName) {
+
+            // data dimensions
+            let m = 512, n = 512;
+
+            d3.csv(fileName).then(function (data) {
+
+                // Step 2 convert data into 1D list
+                data.forEach(function (d) {
+                    if (+d[0] < min_val) {
+                        min_val = +d[0];
+                    }
+
+                    if (max_val < +d[0]) {
+                        max_val = +d[0];
+                    }
+
+                    values_T.push(+d[0]);
+                });
+
+                initMinMaxSlider();
+                initThresholdSlider();
+                plot_contour();
+            });
+        }
+
+        render(ctData);
+
+    </script>
+</body>
+
+</html>
